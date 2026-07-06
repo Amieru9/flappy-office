@@ -241,8 +241,15 @@
                 .order('score', { ascending: false })
                 .limit(5);
 
-            if (error || !data) {
+            if (error) {
+                console.error("Supabase Error:", error);
                 list.innerHTML = '<li>Failed to load scores.</li>';
+                return;
+            }
+
+            // Handle if the database is completely empty
+            if (!data || data.length === 0) {
+                list.innerHTML = '<li>No scores yet. Be the first!</li>';
                 return;
             }
 
