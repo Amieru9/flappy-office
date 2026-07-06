@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Bird - Office Leaderboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            background-color: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Verdana', sans-serif;
+            color: white;
+            overflow: hidden; 
+        }
+        #game-container {
+            position: relative;
+            height: 85vh; 
+            max-height: 800px;
+            aspect-ratio: 288 / 512;
+            box-shadow: 0px 0px 30px rgba(0,0,0,1);
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            border: 2px solid #000;
+            background-color: #70c5ce;
+            image-rendering: pixelated; 
+        }
+        #leaderboard {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%); 
+            width: 85%;
+            background: rgba(0, 0, 0, 0.9);
+            border: 3px solid #f1c40f;
+            border-radius: 10px;
+            padding: 20px;
+            box-sizing: border-box;
+            text-align: center;
+            z-index: 100; 
+        }
+        #leaderboard h2 {
+            margin-top: 0;
+            color: #f1c40f;
+            font-family: 'Impact', sans-serif;
+            letter-spacing: 2px;
+            font-size: 24px;
+        }
+        #leaderboard ol {
+            text-align: left;
+            padding-left: 20px;
+            font-size: 18px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        #restartBtn {
+            padding: 12px 24px;
+            font-size: 18px;
+            font-weight: bold;
+            background-color: #f1c40f;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: #000;
+            width: 100%;
+        }
+        #restartBtn:hover {
+            background-color: #d4ac0d;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="288" height="512"></canvas>
+        
+        <div id="leaderboard">
+            <h2>TOP 5 SCORES</h2>
+            <ol id="scoreList">
+                <li>Loading scores...</li>
+            </ol>
+            <button id="restartBtn" onclick="location.reload()">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. SUPABASE DATABASE SETUP
+        // ==========================================
+        const { createClient } = supabase;
+        
+        // ⚠️ PASTE YOUR URL AND KEY HERE ⚠️
+        const supabaseUrl = 'YOUR_SUPABASE_URL'; 
+        const supabaseKey = 'YOUR_SUPABASE_ANON_KEY';
+
+        let db = null;
+        if (supabaseUrl.startsWith('http')) {
+            db = createClient(supabaseUrl, supabaseKey);
+        }
+
+        // ==========================================
+        // 2. GAME VARIABLES
+        // ==========================================
+        const cvs = document.getElementById("gameCanvas");
+        const ctx = cvs.getContext("2d");
+
+        // Dimensions
+        const pipeWidth = 52;
+        const pipeHeight = 320;
+        const birdW = 34;
+        const birdH = 24;
+        const fgHeight = 112;
+
+        // Physics Engine (Tuned for 60FPS)
+        let bX = 50; 
+        let bY = 220; 
+        let velocity = 0;
+        let gravity = 0.2; // Softer gravity
+        let jump = -4.5;   // Smoother jump
+        let pipeSpeed = 1.5;
+        let terminalVelocity = 6; // Prevents dropping at lightspeed
+
+        let gap = 110; // Slightly wider gap for playability
+        let constant = pipeHeight + gap;
+        let score = 0;
+        
+        let frames = 0;
+        let gameState = 0; // 0 = Get Ready, 1 = Playing, 2 = Game Over
+        let isGameOver = false;
+
+        let pipe = [];
+
+        // ==========================================
+        // 3. ASSET PRE-LOADER (Fixes invisible pipes)
+        // ==========================================
+        let imagesLoaded = 0;
+        const totalImages = 8; // We must wait for these 8 critical images to load before starting
+        
+        function onImageLoad() {
+            imagesLoaded++;
+            if (imagesLoaded === totalImages) {
+                // Initialize first pipe completely off-screen
+                pipe[0] = { x: cvs.width + 50, y: getRandomPipeY(), passed: false };
+                requestAnimationFrame(draw); // Start engine only when ready
+            }
+        }
+
+        const birdColors = ['bluebird', 'redbird', 'yellowbird'];
+        const bgTypes = ['background-day', 'background-night'];
+        const pipeTypes = ['pipe-green', 'pipe-red'];
+
+        const activeBirdColor = birdColors[Math.floor(Math.random() * birdColors.length)];
+        const activeBg = bgTypes[Math.floor(Math.random() * bgTypes.length)];
+        const activePipe = pipeTypes[Math.floor(Math.random() * pipeTypes.length)];
+
+        const bg = new Image(); bg.onload = onImageLoad; bg.src = `images/${activeBg}.png`;
+        const fg = new Image(); fg.onload = onImageLoad; fg.src = "images/base.png";
+        const pipeImg = new Image(); pipeImg.onload = onImageLoad; pipeImg.src = `images/${activePipe}.png`;
+        
+        const birdFrames = [new Image(), new Image(), new Image()];
+        birdFrames[0].onload = onImageLoad; birdFrames[0].src = `images/${activeBirdColor}-downflap.png`;
+        birdFrames[1].onload = onImageLoad; birdFrames[1].src = `images/${activeBirdColor}-midflap.png`;
+        birdFrames[2].onload = onImageLoad; birdFrames[2].src = `images/${activeBirdColor}-upflap.png`;
+
+        const getReadyImg = new Image(); getReadyImg.onload = onImageLoad; getReadyImg.src = "images/message.png";
+        const gameOverImg = new Image(); gameOverImg.onload = onImageLoad; gameOverImg.src = "images/gameover.png";
+
+        const numbers = [];
+        for (let i = 0; i <= 9; i++) {
+            numbers[i] = new Image();
+            numbers[i].src = `images/${i}.png`;
+        }
+
+        const wingSound = new Audio("audio/wing.wav");
+        const hitSound = new Audio("audio/hit.wav");
+        const dieSound = new Audio("audio/die.wav");
+        const pointSound = new Audio("audio/point.wav");
+        const swooshSound = new Audio("audio/swoosh.wav");
+
+        // ==========================================
+        // 4. GENERATE PIPES MATH
+        // ==========================================
+        function getRandomPipeY() {
+            let minPipeY = -pipeHeight + 50; 
+            let maxPipeY = cvs.height - fgHeight - gap - 50 - pipeHeight;
+            return Math.floor(Math.random() * (maxPipeY - minPipeY + 1)) + minPipeY;
+        }
+
+        // ==========================================
+        // 5. CONTROLS
+        // ==========================================
+        function action() {
+            if (gameState === 0) {
+                gameState = 1;
+                swooshSound.play();
+                velocity = jump; 
+            } else if (gameState === 1 && !isGameOver) {
+                velocity = jump; 
+                wingSound.currentTime = 0; 
+                wingSound.play();
+            }
+        }
+
+        document.addEventListener("keydown", function(e) {
+            if (e.code === "Space" || e.code === "ArrowUp") action();
+        });
+        document.addEventListener("mousedown", action);
+        document.addEventListener("touchstart", action); 
+
+        // ==========================================
+        // 6. LEADERBOARD SYSTEM
+        // ==========================================
+        async function submitScore(playerName, finalScore) {
+            if (!db) return; 
+            const { error } = await db.from('leaderboard').insert([{ name: playerName, score: finalScore }]);
+            if (error) console.error("Database Error:", error);
+        }
+
+        async function showLeaderboard() {
+            const leaderboardDiv = document.getElementById('leaderboard');
+            leaderboardDiv.style.display = 'block';
+            
+            if (!db) {
+                document.getElementById('scoreList').innerHTML = '<li>Database not connected.</li>';
+                return;
+            }
+
+            const list = document.getElementById('scoreList');
+            list.innerHTML = '<li>Loading scores...</li>';
+
+            const { data, error } = await db
+                .from('leaderboard')
+                .select('name, score')
+                .order('score', { ascending: false })
+                .limit(5);
+
+            if (error || !data) {
+                list.innerHTML = '<li>Failed to load scores.</li>';
+                return;
+            }
+
+            list.innerHTML = '';
+            data.forEach(entry => {
+                let li = document.createElement('li');
+                li.textContent = `${entry.name} - ${entry.score}`;
+                list.appendChild(li);
+            });
+        }
+
+        function drawScore() {
+            let scoreStr = score.toString();
+            let totalWidth = scoreStr.length * 24; 
+            let startX = (cvs.width - totalWidth) / 2;
+
+            for (let i = 0; i < scoreStr.length; i++) {
+                let num = parseInt(scoreStr[i]);
+                if (numbers[num].complete) {
+                    ctx.drawImage(numbers[num], startX + (i * 24), 30);
+                }
+            }
+        }
+
+        // ==========================================
+        // 7. MAIN GAME LOOP (Locked to 60 FPS)
+        // ==========================================
+        let then = Date.now();
+        const fpsInterval = 1000 / 60; // Strictly 60 frames per second
+
+        function draw() {
+            requestAnimationFrame(draw);
+            
+            let now = Date.now();
+            let elapsed = now - then;
+            
+            // Frame Throttle: Only run logic if enough time has passed
+            if (elapsed > fpsInterval) {
+                then = now - (elapsed % fpsInterval);
+                
+                ctx.drawImage(bg, 0, 0);
+
+                if (gameState === 1) {
+                    for(let i = 0; i < pipe.length; i++) {
+                        
+                        // Draw Top Pipe (Flipped)
+                        ctx.save();
+                        ctx.translate(pipe[i].x + pipeWidth/2, pipe[i].y + pipeHeight/2);
+                        ctx.scale(1, -1);
+                        ctx.drawImage(pipeImg, -pipeWidth/2, -pipeHeight/2, pipeWidth, pipeHeight);
+                        ctx.restore();
+
+                        // Draw Bottom Pipe
+                        ctx.drawImage(pipeImg, pipe[i].x, pipe[i].y + constant, pipeWidth, pipeHeight);
+                        
+                        pipe[i].x -= pipeSpeed;
+
+                        // Collision Detection
+                        if( bX + birdW > pipe[i].x && bX < pipe[i].x + pipeWidth && 
+                          (bY < pipe[i].y + pipeHeight || bY + birdH > pipe[i].y + constant) || 
+                          bY + birdH >= cvs.height - fgHeight ) {
+                            
+                            if (!isGameOver) {
+                                isGameOver = true;
+                                gameState = 2;
+                                hitSound.play();
+                                
+                                if (bY + birdH < cvs.height - fgHeight) {
+                                    setTimeout(() => dieSound.play(), 400);
+                                }
+
+                                // Delay Leaderboard so user sees they died
+                                setTimeout(async () => {
+                                    let playerName = prompt(`Game Over! You scored ${score}.\nEnter your name for the leaderboard:`);
+                                    if (playerName && playerName.trim() !== "") {
+                                        await submitScore(playerName.trim(), score);
+                                    }
+                                    await showLeaderboard();
+                                }, 800); 
+                            }
+                        }
+
+                        // Score logic
+                        if(!pipe[i].passed && pipe[i].x + pipeWidth < bX) {
+                            score++;
+                            pointSound.play();
+                            pipe[i].passed = true;
+                        }
+                    }
+
+                    // Add new pipes
+                    let lastPipe = pipe[pipe.length - 1];
+                    if (lastPipe.x < cvs.width - 170) {
+                        pipe.push({ x: cvs.width, y: getRandomPipeY(), passed: false });
+                    }
+                }
+
+                ctx.drawImage(fg, 0, cvs.height - fgHeight);
+
+                // Bird Animation & Bobbing effect before game starts
+                let birdState = 0;
+                let drawY = bY;
+                
+                if (gameState === 0) {
+                    // Bobbing effect
+                    drawY = bY + Math.sin(frames * 0.1) * 5; 
+                    birdState = (frames % 30 < 15) ? 0 : 1; 
+                } else if (gameState !== 2) {
+                    // Flapping effect
+                    let flapCycle = frames % 15;
+                    if (flapCycle < 5) birdState = 0;
+                    else if (flapCycle < 10) birdState = 1;
+                    else birdState = 2;
+                }
+                
+                // Bird Rotation based on velocity
+                ctx.save();
+                ctx.translate(bX + birdW/2, drawY + birdH/2);
+                if (gameState === 1 || gameState === 2) {
+                    let rotation = Math.min(Math.PI / 4, Math.max(-Math.PI / 4, (velocity * 0.08)));
+                    if (isGameOver) rotation = Math.PI / 2; // Faceplant if dead
+                    ctx.rotate(rotation);
+                }
+                ctx.drawImage(birdFrames[birdState], -birdW/2, -birdH/2);
+                ctx.restore();
+                
+                // Physics application
+                if (gameState === 1 && !isGameOver) {
+                    velocity += gravity;
+                    if (velocity > terminalVelocity) velocity = terminalVelocity;
+                    bY += velocity;
+                } else if (isGameOver && bY + birdH < cvs.height - fgHeight) {
+                    velocity += gravity;
+                    if (velocity > terminalVelocity) velocity = terminalVelocity;
+                    bY += velocity;
+                }
+
+                // UI Overlays
+                if (gameState === 0) {
+                    ctx.drawImage(getReadyImg, cvs.width/2 - 184/2, 100); 
+                } else if (gameState === 2 && bY + birdH >= cvs.height - fgHeight) {
+                    ctx.drawImage(gameOverImg, cvs.width/2 - 192/2, cvs.height/2 - 100);
+                }
+
+                if (gameState === 1 || gameState === 2) drawScore();
+
+                frames++;
+            }
+        }
+    </script>
+</body>
+</html>
