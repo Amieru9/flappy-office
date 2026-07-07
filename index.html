@@ -152,7 +152,7 @@
         // 3. ASSET PRE-LOADER (Fixes invisible pipes)
         // ==========================================
         let imagesLoaded = 0;
-        const totalImages = 8; // We must wait for these 8 critical images to load before starting
+        const totalImages = 7; // Changed to 7 because we are using 2 face frames instead of 3 birds
         
         function onImageLoad() {
             imagesLoaded++;
@@ -163,11 +163,9 @@
             }
         }
 
-        const birdColors = ['bluebird', 'redbird', 'yellowbird'];
         const bgTypes = ['background-day', 'background-night'];
         const pipeTypes = ['pipe-green', 'pipe-red'];
 
-        const activeBirdColor = birdColors[Math.floor(Math.random() * birdColors.length)];
         const activeBg = bgTypes[Math.floor(Math.random() * bgTypes.length)];
         const activePipe = pipeTypes[Math.floor(Math.random() * pipeTypes.length)];
 
@@ -175,10 +173,10 @@
         const fg = new Image(); fg.onload = onImageLoad; fg.src = "images/base.png";
         const pipeImg = new Image(); pipeImg.onload = onImageLoad; pipeImg.src = `images/${activePipe}.png`;
         
-        const birdFrames = [new Image(), new Image(), new Image()];
-        birdFrames[0].onload = onImageLoad; birdFrames[0].src = `images/${activeBirdColor}-downflap.png`;
-        birdFrames[1].onload = onImageLoad; birdFrames[1].src = `images/${activeBirdColor}-midflap.png`;
-        birdFrames[2].onload = onImageLoad; birdFrames[2].src = `images/${activeBirdColor}-upflap.png`;
+        // --- CUSTOM FACE ASSETS ---
+        const birdFrames = [new Image(), new Image()];
+        birdFrames[0].onload = onImageLoad; birdFrames[0].src = `images/paine-closed.png`;
+        birdFrames[1].onload = onImageLoad; birdFrames[1].src = `images/paine-opened.png`;
 
         const getReadyImg = new Image(); getReadyImg.onload = onImageLoad; getReadyImg.src = "images/message.png";
         const gameOverImg = new Image(); gameOverImg.onload = onImageLoad; gameOverImg.src = "images/gameover.png";
@@ -360,20 +358,21 @@
 
                 ctx.drawImage(fg, 0, cvs.height - fgHeight);
 
-                // Bird Animation & Bobbing effect before game starts
+                // --- CUSTOM ANIMATION LOGIC ---
                 let birdState = 0;
                 let drawY = bY;
                 
                 if (gameState === 0) {
                     // Bobbing effect
                     drawY = bY + Math.sin(frames * 0.1) * 5; 
-                    birdState = (frames % 30 < 15) ? 0 : 1; 
+                    birdState = 0; // Mouth closed while waiting
                 } else if (gameState !== 2) {
-                    // Flapping effect
-                    let flapCycle = frames % 15;
-                    if (flapCycle < 5) birdState = 0;
-                    else if (flapCycle < 10) birdState = 1;
-                    else birdState = 2;
+                    // Open mouth if moving UP (negative velocity)
+                    if (velocity < 0) {
+                        birdState = 1; // paine-opened.png
+                    } else {
+                        birdState = 0; // paine-closed.png
+                    }
                 }
                 
                 // Bird Rotation based on velocity
@@ -384,8 +383,11 @@
                     if (isGameOver) rotation = Math.PI / 2; // Faceplant if dead
                     ctx.rotate(rotation);
                 }
-                ctx.drawImage(birdFrames[birdState], -birdW/2, -birdH/2);
+                
+                // FORCE the photo to scale down to the hitbox size (birdW, birdH)
+                ctx.drawImage(birdFrames[birdState], -birdW/2, -birdH/2, birdW, birdH); 
                 ctx.restore();
+                // ------------------------------
                 
                 // Physics application
                 if (gameState === 1 && !isGameOver) {
