@@ -123,8 +123,11 @@
 
         const pipeWidth = 52;
         const pipeHeight = 320;
-        const birdW = 34;
-        const birdH = 24;
+        
+        // --- INCREASED FACE SIZE ---
+        const birdW = 46; // Originally 34
+        const birdH = 34; // Originally 24
+        
         const fgHeight = 112;
 
         let bX = 50; 
@@ -135,7 +138,8 @@
         let pipeSpeed = 1.5;
         let terminalVelocity = 6; 
 
-        let gap = 110; 
+        // --- INCREASED PIPE GAP ---
+        let gap = 140; // Originally 110
         let constant = pipeHeight + gap;
         let score = 0;
         
@@ -146,7 +150,7 @@
         let pipe = [];
 
         // ==========================================
-        // 3. ASSET PRE-LOADER (Bulletproof Version)
+        // 3. ASSET PRE-LOADER (Fixed Error Handling)
         // ==========================================
         let imagesLoaded = 0;
         const totalImages = 7; 
@@ -159,14 +163,16 @@
             }
         }
 
-        // The new image loader with error catching
+        // The image loader with error catching
         function loadImg(src) {
             const img = new Image();
             img.onload = checkReady;
             img.onerror = function() {
-                alert("🚨 MISSING FILE ON GITHUB: " + src + "\n\nCheck your GitHub repository. Ensure the file exists and that capital letters match exactly (e.g., .PNG is different from .png).");
-                // Replace with a transparent pixel so the game loop doesn't crash
-                img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+                alert("🚨 MISSING FILE: " + src + "\n\nEnsure you pushed this file to your GitHub repository!");
+                img.onload = null; // Prevent double-triggering
+                img.onerror = null;
+                // Load a transparent pixel to prevent the game loop from crashing
+                img.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
                 checkReady();
             };
             img.src = src;
