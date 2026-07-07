@@ -31,11 +31,49 @@
             background-color: #70c5ce;
             image-rendering: pixelated; 
         }
+        
+        /* Character Selection UI */
+        #charSelect {
+            display: none; /* Hidden until core images load */
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%); 
+            width: 85%;
+            background: rgba(0, 0, 0, 0.9);
+            border: 3px solid #3498db;
+            border-radius: 10px;
+            padding: 20px;
+            box-sizing: border-box;
+            text-align: center;
+            z-index: 100; 
+        }
+        #charSelect h2 {
+            margin-top: 0;
+            color: #3498db;
+            font-family: 'Impact', sans-serif;
+            letter-spacing: 2px;
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+        .char-btn {
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            background-color: #3498db;
+            border: none; border-radius: 5px;
+            cursor: pointer; color: #fff;
+            width: 100%; margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        .char-btn:hover { background-color: #2980b9; }
+        .random-btn { background-color: #9b59b6; border: 2px solid #8e44ad; margin-top: 10px;}
+        .random-btn:hover { background-color: #8e44ad; }
+
+        /* Leaderboard UI */
         #leaderboard {
             display: none;
             position: absolute;
-            top: 50%;
-            left: 50%;
+            top: 50%; left: 50%;
             transform: translate(-50%, -50%); 
             width: 85%;
             background: rgba(0, 0, 0, 0.9);
@@ -47,43 +85,25 @@
             z-index: 100; 
         }
         #leaderboard h2 {
-            margin-top: 0;
-            color: #f1c40f;
+            margin-top: 0; color: #f1c40f;
             font-family: 'Impact', sans-serif;
-            letter-spacing: 2px;
-            font-size: 24px;
-            margin-bottom: 5px;
+            letter-spacing: 2px; font-size: 24px; margin-bottom: 5px;
         }
         #prizeText {
-            color: #2ecc71;
-            font-weight: bold;
-            font-size: 14px;
-            margin-top: 0;
-            margin-bottom: 15px;
-            text-transform: uppercase;
+            color: #2ecc71; font-weight: bold; font-size: 14px;
+            margin-top: 0; margin-bottom: 15px; text-transform: uppercase;
             text-shadow: 1px 1px 2px #000;
         }
         #leaderboard ol {
-            text-align: left;
-            padding-left: 20px;
-            font-size: 18px;
-            line-height: 1.6;
-            margin-bottom: 20px;
+            text-align: left; padding-left: 20px;
+            font-size: 18px; line-height: 1.6; margin-bottom: 20px;
         }
         #restartBtn {
-            padding: 12px 24px;
-            font-size: 18px;
-            font-weight: bold;
-            background-color: #f1c40f;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            color: #000;
-            width: 100%;
+            padding: 12px 24px; font-size: 18px; font-weight: bold;
+            background-color: #f1c40f; border: none; border-radius: 5px;
+            cursor: pointer; color: #000; width: 100%;
         }
-        #restartBtn:hover {
-            background-color: #d4ac0d;
-        }
+        #restartBtn:hover { background-color: #d4ac0d; }
     </style>
 </head>
 <body>
@@ -91,6 +111,12 @@
     <div id="game-container">
         <canvas id="gameCanvas" width="288" height="512"></canvas>
         
+        <div id="charSelect">
+            <h2>SELECT PLAYER</h2>
+            <div id="charList">
+                </div>
+        </div>
+
         <div id="leaderboard">
             <h2>TOP 5 SCORES</h2>
             <p id="prizeText">🏆 Top 1 Wins a Powerbank! 🏆</p>
@@ -116,18 +142,25 @@
         }
 
         // ==========================================
-        // 2. GAME VARIABLES
+        // 2. CHARACTER CONFIGURATION (EASY TO ADD MORE)
+        // ==========================================
+        // To add a new person, just copy a line, change the name, and point to their files in the 'faces' folder!
+        const FACES = [
+            { name: "Paine", closed: "images/faces/paine-closed.png", opened: "images/faces/paine-opened.png" },
+            { name: "Gil", closed: "images/faces/gil-closed.png", opened: "images/faces/gil-opened.png" }
+            // Example: { name: "John", closed: "images/faces/john-closed.png", opened: "images/faces/john-opened.png" }
+        ];
+
+        // ==========================================
+        // 3. GAME VARIABLES
         // ==========================================
         const cvs = document.getElementById("gameCanvas");
         const ctx = cvs.getContext("2d");
 
         const pipeWidth = 52;
         const pipeHeight = 320;
-        
-        // --- INCREASED FACE SIZE ---
-        const birdW = 46; // Originally 34
-        const birdH = 46; // Originally 24
-        
+        const birdW = 46; 
+        const birdH = 50; 
         const fgHeight = 112;
 
         let bX = 50; 
@@ -138,8 +171,7 @@
         let pipeSpeed = 1.5;
         let terminalVelocity = 6; 
 
-        // --- INCREASED PIPE GAP ---
-        let gap = 140; // Originally 110
+        let gap = 140; 
         let constant = pipeHeight + gap;
         let score = 0;
         
@@ -148,60 +180,54 @@
         let isGameOver = false;
 
         let pipe = [];
+        let birdFrames = [new Image(), new Image()]; // Populated after selection
 
         // ==========================================
-        // 3. ASSET PRE-LOADER (Fixed Error Handling)
+        // 4. TWO-STAGE PRE-LOADER (Core -> Face)
         // ==========================================
-        let imagesLoaded = 0;
-        const totalImages = 7; 
         
-        function checkReady() {
-            imagesLoaded++;
-            if (imagesLoaded === totalImages) {
-                pipe[0] = { x: cvs.width + 50, y: getRandomPipeY(), passed: false };
-                requestAnimationFrame(draw); 
-            }
-        }
-
-        // The image loader with error catching
-        function loadImg(src) {
+        // Bulletproof Image Loader
+        function loadImg(src, callback) {
             const img = new Image();
-            img.onload = checkReady;
+            img.onload = callback;
             img.onerror = function() {
                 alert("🚨 MISSING FILE: " + src + "\n\nEnsure you pushed this file to your GitHub repository!");
-                img.onload = null; // Prevent double-triggering
-                img.onerror = null;
-                // Load a transparent pixel to prevent the game loop from crashing
+                img.onload = null; img.onerror = null;
                 img.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
-                checkReady();
+                callback();
             };
             img.src = src;
             return img;
         }
 
+        // STAGE 1: Load Core UI & Backgrounds
+        let coreLoaded = 0;
+        const TOTAL_CORE = 15; 
+        
+        function checkCore() {
+            coreLoaded++;
+            if (coreLoaded === TOTAL_CORE) {
+                // Draw a nice background behind the menu so it isn't a blank blue screen
+                ctx.drawImage(bg, 0, 0, cvs.width, cvs.height);
+                ctx.drawImage(fg, 0, cvs.height - fgHeight, cvs.width, fgHeight);
+                buildCharacterMenu();
+            }
+        }
+
         const bgTypes = ['background-day', 'background-night'];
         const pipeTypes = ['pipe-green', 'pipe-red'];
-
         const activeBg = bgTypes[Math.floor(Math.random() * bgTypes.length)];
         const activePipe = pipeTypes[Math.floor(Math.random() * pipeTypes.length)];
 
-        const bg = loadImg(`images/${activeBg}.png`);
-        const fg = loadImg("images/base.png");
-        const pipeImg = loadImg(`images/${activePipe}.png`);
-        
-        // --- CUSTOM FACE ASSETS ---
-        const birdFrames = [
-            loadImg("images/paine-closed.png"),
-            loadImg("images/paine-opened.png")
-        ];
-
-        const getReadyImg = loadImg("images/message.png");
-        const gameOverImg = loadImg("images/gameover.png");
+        const bg = loadImg(`images/${activeBg}.png`, checkCore);
+        const fg = loadImg("images/base.png", checkCore);
+        const pipeImg = loadImg(`images/${activePipe}.png`, checkCore);
+        const getReadyImg = loadImg("images/message.png", checkCore);
+        const gameOverImg = loadImg("images/gameover.png", checkCore);
 
         const numbers = [];
         for (let i = 0; i <= 9; i++) {
-            numbers[i] = new Image();
-            numbers[i].src = `images/${i}.png`;
+            numbers[i] = loadImg(`images/${i}.png`, checkCore);
         }
 
         const wingSound = new Audio("audio/wing.wav");
@@ -210,8 +236,52 @@
         const pointSound = new Audio("audio/point.wav");
         const swooshSound = new Audio("audio/swoosh.wav");
 
+        // STAGE 2: Character Selection Menu
+        function buildCharacterMenu() {
+            const charMenu = document.getElementById('charSelect');
+            const charList = document.getElementById('charList');
+            charMenu.style.display = 'block';
+
+            // Generate specific face buttons
+            FACES.forEach(face => {
+                let btn = document.createElement('button');
+                btn.className = 'char-btn';
+                btn.innerText = `Play as ${face.name}`;
+                btn.onclick = () => selectFace(face);
+                charList.appendChild(btn);
+            });
+
+            // Generate Random button
+            let randBtn = document.createElement('button');
+            randBtn.className = 'char-btn random-btn';
+            randBtn.innerText = '🎲 Random Player';
+            randBtn.onclick = () => {
+                const randomFace = FACES[Math.floor(Math.random() * FACES.length)];
+                selectFace(randomFace);
+            };
+            charList.appendChild(randBtn);
+        }
+
+        function selectFace(faceObj) {
+            document.getElementById('charSelect').style.display = 'none';
+            
+            let faceLoaded = 0;
+            function checkFace() {
+                faceLoaded++;
+                if (faceLoaded === 2) {
+                    // Start the engine!
+                    pipe[0] = { x: cvs.width + 50, y: getRandomPipeY(), passed: false };
+                    requestAnimationFrame(draw); 
+                }
+            }
+            
+            // Load the specific face chosen by the user
+            birdFrames[0] = loadImg(faceObj.closed, checkFace);
+            birdFrames[1] = loadImg(faceObj.opened, checkFace);
+        }
+
         // ==========================================
-        // 4. GENERATE PIPES MATH
+        // 5. GENERATE PIPES MATH
         // ==========================================
         function getRandomPipeY() {
             let minPipeY = -pipeHeight + 50; 
@@ -220,7 +290,7 @@
         }
 
         // ==========================================
-        // 5. CONTROLS
+        // 6. CONTROLS
         // ==========================================
         function action() {
             if (gameState === 0) {
@@ -237,11 +307,20 @@
         document.addEventListener("keydown", function(e) {
             if (e.code === "Space" || e.code === "ArrowUp") action();
         });
-        document.addEventListener("mousedown", action);
-        document.addEventListener("touchstart", action); 
+        document.addEventListener("mousedown", function(e) {
+            // Prevent accidental jumps while clicking menu buttons
+            if (document.getElementById('charSelect').style.display === 'none') {
+                action();
+            }
+        });
+        document.addEventListener("touchstart", function(e) {
+            if (document.getElementById('charSelect').style.display === 'none') {
+                action();
+            }
+        });
 
         // ==========================================
-        // 6. LEADERBOARD SYSTEM
+        // 7. LEADERBOARD SYSTEM
         // ==========================================
         async function submitScore(playerName, finalScore) {
             if (!db) return; 
@@ -300,7 +379,7 @@
         }
 
         // ==========================================
-        // 7. MAIN GAME LOOP (Locked to 60 FPS)
+        // 8. MAIN GAME LOOP (Locked to 60 FPS)
         // ==========================================
         let then = Date.now();
         const fpsInterval = 1000 / 60; 
