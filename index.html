@@ -107,7 +107,6 @@
         // ==========================================
         const { createClient } = supabase;
         
-        // ⚠️ PASTE YOUR URL AND KEY HERE ⚠️
         const supabaseUrl = 'https://unmwltgfyaonwxiauhlm.supabase.co'; 
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVubXdsdGdmeWFvbnd4aWF1aGxtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODE0OTkwMCwiZXhwIjoyMDkzNzI1OTAwfQ.L05U7AW3SuKroB1HmNyVT_9xvPmtOzIpcmAxK8_TW50';
 
@@ -122,45 +121,56 @@
         const cvs = document.getElementById("gameCanvas");
         const ctx = cvs.getContext("2d");
 
-        // Dimensions
         const pipeWidth = 52;
         const pipeHeight = 320;
         const birdW = 34;
         const birdH = 24;
         const fgHeight = 112;
 
-        // Physics Engine (Tuned for 60FPS)
         let bX = 50; 
         let bY = 220; 
         let velocity = 0;
-        let gravity = 0.2; // Softer gravity
-        let jump = -4.5;   // Smoother jump
+        let gravity = 0.2; 
+        let jump = -4.5;   
         let pipeSpeed = 1.5;
-        let terminalVelocity = 6; // Prevents dropping at lightspeed
+        let terminalVelocity = 6; 
 
-        let gap = 110; // Slightly wider gap for playability
+        let gap = 110; 
         let constant = pipeHeight + gap;
         let score = 0;
         
         let frames = 0;
-        let gameState = 0; // 0 = Get Ready, 1 = Playing, 2 = Game Over
+        let gameState = 0; 
         let isGameOver = false;
 
         let pipe = [];
 
         // ==========================================
-        // 3. ASSET PRE-LOADER (Fixes invisible pipes)
+        // 3. ASSET PRE-LOADER (Bulletproof Version)
         // ==========================================
         let imagesLoaded = 0;
-        const totalImages = 7; // Changed to 7 because we are using 2 face frames instead of 3 birds
+        const totalImages = 7; 
         
-        function onImageLoad() {
+        function checkReady() {
             imagesLoaded++;
             if (imagesLoaded === totalImages) {
-                // Initialize first pipe completely off-screen
                 pipe[0] = { x: cvs.width + 50, y: getRandomPipeY(), passed: false };
-                requestAnimationFrame(draw); // Start engine only when ready
+                requestAnimationFrame(draw); 
             }
+        }
+
+        // The new image loader with error catching
+        function loadImg(src) {
+            const img = new Image();
+            img.onload = checkReady;
+            img.onerror = function() {
+                alert("🚨 MISSING FILE ON GITHUB: " + src + "\n\nCheck your GitHub repository. Ensure the file exists and that capital letters match exactly (e.g., .PNG is different from .png).");
+                // Replace with a transparent pixel so the game loop doesn't crash
+                img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+                checkReady();
+            };
+            img.src = src;
+            return img;
         }
 
         const bgTypes = ['background-day', 'background-night'];
@@ -169,17 +179,18 @@
         const activeBg = bgTypes[Math.floor(Math.random() * bgTypes.length)];
         const activePipe = pipeTypes[Math.floor(Math.random() * pipeTypes.length)];
 
-        const bg = new Image(); bg.onload = onImageLoad; bg.src = `images/${activeBg}.png`;
-        const fg = new Image(); fg.onload = onImageLoad; fg.src = "images/base.png";
-        const pipeImg = new Image(); pipeImg.onload = onImageLoad; pipeImg.src = `images/${activePipe}.png`;
+        const bg = loadImg(`images/${activeBg}.png`);
+        const fg = loadImg("images/base.png");
+        const pipeImg = loadImg(`images/${activePipe}.png`);
         
         // --- CUSTOM FACE ASSETS ---
-        const birdFrames = [new Image(), new Image()];
-        birdFrames[0].onload = onImageLoad; birdFrames[0].src = `images/paine-closed.png`;
-        birdFrames[1].onload = onImageLoad; birdFrames[1].src = `images/paine-opened.png`;
+        const birdFrames = [
+            loadImg("images/paine-closed.png"),
+            loadImg("images/paine-opened.png")
+        ];
 
-        const getReadyImg = new Image(); getReadyImg.onload = onImageLoad; getReadyImg.src = "images/message.png";
-        const gameOverImg = new Image(); gameOverImg.onload = onImageLoad; gameOverImg.src = "images/gameover.png";
+        const getReadyImg = loadImg("images/message.png");
+        const gameOverImg = loadImg("images/gameover.png");
 
         const numbers = [];
         for (let i = 0; i <= 9; i++) {
@@ -256,7 +267,6 @@
                 return;
             }
 
-            // Handle if the database is completely empty
             if (!data || data.length === 0) {
                 list.innerHTML = '<li>No scores yet. Be the first!</li>';
                 return;
@@ -287,7 +297,7 @@
         // 7. MAIN GAME LOOP (Locked to 60 FPS)
         // ==========================================
         let then = Date.now();
-        const fpsInterval = 1000 / 60; // Strictly 60 frames per second
+        const fpsInterval = 1000 / 60; 
 
         function draw() {
             requestAnimationFrame(draw);
@@ -295,7 +305,6 @@
             let now = Date.now();
             let elapsed = now - then;
             
-            // Frame Throttle: Only run logic if enough time has passed
             if (elapsed > fpsInterval) {
                 then = now - (elapsed % fpsInterval);
                 
@@ -304,19 +313,16 @@
                 if (gameState === 1) {
                     for(let i = 0; i < pipe.length; i++) {
                         
-                        // Draw Top Pipe (Flipped)
                         ctx.save();
                         ctx.translate(pipe[i].x + pipeWidth/2, pipe[i].y + pipeHeight/2);
                         ctx.scale(1, -1);
                         ctx.drawImage(pipeImg, -pipeWidth/2, -pipeHeight/2, pipeWidth, pipeHeight);
                         ctx.restore();
 
-                        // Draw Bottom Pipe
                         ctx.drawImage(pipeImg, pipe[i].x, pipe[i].y + constant, pipeWidth, pipeHeight);
                         
                         pipe[i].x -= pipeSpeed;
 
-                        // Collision Detection
                         if( bX + birdW > pipe[i].x && bX < pipe[i].x + pipeWidth && 
                           (bY < pipe[i].y + pipeHeight || bY + birdH > pipe[i].y + constant) || 
                           bY + birdH >= cvs.height - fgHeight ) {
@@ -330,7 +336,6 @@
                                     setTimeout(() => dieSound.play(), 400);
                                 }
 
-                                // Delay Leaderboard so user sees they died
                                 setTimeout(async () => {
                                     let playerName = prompt(`Game Over! You scored ${score}.\nEnter your name for the leaderboard:`);
                                     if (playerName && playerName.trim() !== "") {
@@ -341,7 +346,6 @@
                             }
                         }
 
-                        // Score logic
                         if(!pipe[i].passed && pipe[i].x + pipeWidth < bX) {
                             score++;
                             pointSound.play();
@@ -349,7 +353,6 @@
                         }
                     }
 
-                    // Add new pipes
                     let lastPipe = pipe[pipe.length - 1];
                     if (lastPipe.x < cvs.width - 170) {
                         pipe.push({ x: cvs.width, y: getRandomPipeY(), passed: false });
@@ -363,33 +366,27 @@
                 let drawY = bY;
                 
                 if (gameState === 0) {
-                    // Bobbing effect
                     drawY = bY + Math.sin(frames * 0.1) * 5; 
-                    birdState = 0; // Mouth closed while waiting
+                    birdState = 0; 
                 } else if (gameState !== 2) {
-                    // Open mouth if moving UP (negative velocity)
                     if (velocity < 0) {
-                        birdState = 1; // paine-opened.png
+                        birdState = 1; 
                     } else {
-                        birdState = 0; // paine-closed.png
+                        birdState = 0; 
                     }
                 }
                 
-                // Bird Rotation based on velocity
                 ctx.save();
                 ctx.translate(bX + birdW/2, drawY + birdH/2);
                 if (gameState === 1 || gameState === 2) {
                     let rotation = Math.min(Math.PI / 4, Math.max(-Math.PI / 4, (velocity * 0.08)));
-                    if (isGameOver) rotation = Math.PI / 2; // Faceplant if dead
+                    if (isGameOver) rotation = Math.PI / 2; 
                     ctx.rotate(rotation);
                 }
                 
-                // FORCE the photo to scale down to the hitbox size (birdW, birdH)
                 ctx.drawImage(birdFrames[birdState], -birdW/2, -birdH/2, birdW, birdH); 
                 ctx.restore();
-                // ------------------------------
                 
-                // Physics application
                 if (gameState === 1 && !isGameOver) {
                     velocity += gravity;
                     if (velocity > terminalVelocity) velocity = terminalVelocity;
@@ -400,7 +397,6 @@
                     bY += velocity;
                 }
 
-                // UI Overlays
                 if (gameState === 0) {
                     ctx.drawImage(getReadyImg, cvs.width/2 - 184/2, 100); 
                 } else if (gameState === 2 && bY + birdH >= cvs.height - fgHeight) {
